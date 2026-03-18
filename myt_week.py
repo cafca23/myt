@@ -32,7 +32,7 @@ if uploaded_files:
             for file in uploaded_files:
                 combined_text += f"\n\n--- [{file.name}] ---\n"
                 
-                # 💡 [핵심 해결책] UTF-8로 먼저 읽어보고, 실패하면 CP949(한국어 윈도우 방식)로 읽도록 예외 처리!
+                # 깨짐 방지: UTF-8 / CP949 자동 호환
                 try:
                     content = file.getvalue().decode("utf-8")
                 except UnicodeDecodeError:
@@ -59,9 +59,21 @@ if uploaded_files:
             
             try:
                 response = model.generate_content(prompt)
-                st.success("🎉 완벽한 주간업무보고가 완성되었습니다! 바로 복사해서 결재 올리세요!")
+                st.success("🎉 완벽한 주간업무보고가 완성되었습니다!")
+                
+                # 결과 출력
                 with st.container(border=True):
                     st.markdown(response.text)
+                
+                # 💡 [핵심] 다운로드 버튼 추가
+                st.download_button(
+                    label="💾 결과물 .txt 파일로 다운로드하기",
+                    data=response.text,
+                    file_name="이번주_주간업무보고.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+                
             except ResourceExhausted:
                 st.error("🚨 AI 과부하 상태입니다. 딱 1분만 기다렸다가 다시 눌러주세요!")
             except Exception as e:
