@@ -18,7 +18,7 @@ st.write("매일 쓴 일일보고(.txt) 파일들을 한 번에 드래그해서 
 st.divider()
 
 # ==========================================
-# 1. 파일 업로드 영역 (여러 개 동시 업로드 가능!)
+# 1. 파일 업로드 영역
 # ==========================================
 uploaded_files = st.file_uploader("📂 일주일 치 '일일업무보고 .txt' 파일들을 모두 선택해서 올려주세요!", type="txt", accept_multiple_files=True)
 
@@ -31,7 +31,14 @@ if uploaded_files:
             combined_text = ""
             for file in uploaded_files:
                 combined_text += f"\n\n--- [{file.name}] ---\n"
-                combined_text += file.getvalue().decode("utf-8")
+                
+                # 💡 [핵심 해결책] UTF-8로 먼저 읽어보고, 실패하면 CP949(한국어 윈도우 방식)로 읽도록 예외 처리!
+                try:
+                    content = file.getvalue().decode("utf-8")
+                except UnicodeDecodeError:
+                    content = file.getvalue().decode("cp949", errors="ignore")
+                    
+                combined_text += content
                 
             prompt = f"""
             당신은 최고의 IT 인프라 엔지니어이자 보고서 작성의 달인입니다.
