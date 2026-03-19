@@ -40,7 +40,7 @@ if uploaded_files:
                     
                 combined_text += content
                 
-           prompt = f"""
+            prompt = f"""
             당신은 최고의 IT 인프라 엔지니어이자 보고서 작성의 달인입니다.
             다음은 일주일 동안 흩어져서 작성된 여러 개의 '일일업무보고' 내용입니다.
 
@@ -68,7 +68,7 @@ if uploaded_files:
                 with st.container(border=True):
                     st.markdown(response.text)
                 
-                # 💡 [핵심] 다운로드 버튼 추가
+                # 다운로드 버튼 추가
                 st.download_button(
                     label="💾 결과물 .txt 파일로 다운로드하기",
                     data=response.text,
