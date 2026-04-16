@@ -1,10 +1,14 @@
 import streamlit as st
 import google.generativeai as genai
-# import pdfplumber (PDF 추출용)
 
-# 1. API 키 세팅 (시스템 환경변수로 관리 권장)
-genai.configure(api_key="발급받은_API_KEY")
+# Streamlit Secrets에서 API 키 불러오기
+api_key = st.secrets["GEMINI_API_KEY"]
+
+# API 키 세팅
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-1.5-pro')
+
+st.success("✅ 안전하게 API 키 연동이 완료되었습니다!")
 
 # 2. 마이티시스템 기본 스펙 (프롬프트로 고정)
 mighty_profile = """
