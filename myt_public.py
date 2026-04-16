@@ -2,11 +2,11 @@ import streamlit as st
 import google.generativeai as genai
 import pdfplumber
 
-# 1. API 키 세팅 (Secrets 사용)
+# 1. API 키 세팅 및 모델 지정
 api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 
-# 💡 해결된 부분: 차장님 API 키에 맞춰 가장 최신/빠른 2.5 Flash 모델로 지정!
+# 💡 차장님 API 키에 맞춰 가장 최신/빠른 2.5 Flash 모델로 지정!
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 # 2. 마이티시스템 입찰 스펙 프로필
