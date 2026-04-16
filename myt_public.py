@@ -5,7 +5,7 @@ import pdfplumber
 # 1. API 키 세팅 (Secrets 사용)
 api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-pro')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # 2. 마이티시스템 입찰 스펙 프로필
 mighty_profile = """
