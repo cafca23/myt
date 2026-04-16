@@ -1,3 +1,15 @@
+import streamlit as st
+import google.generativeai as genai
+import pdfplumber
+
+# 1. API 키 세팅 및 모델 지정
+api_key = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=api_key)
+
+# 최신/빠른 모델 지정
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+# 2. 마이티시스템 입찰 스펙 프로필 (물품번호 및 품명 완벽 반영)
 # 2. 마이티시스템 마스터 프로필 (PDF 원본 기반 100% 완벽 반영)
 mighty_profile = """
 당신은 '마이티시스템'의 입찰 담당 전문 AI 비서입니다. 
@@ -49,3 +61,35 @@ mighty_profile = """
 2. 자격 매칭 리스트: 공고문에서 요구하는 업종코드, 물품번호 10자리(또는 앞 8자리), 한글 품명, 시공능력, 직접생산 여부가 우리 조건과 일치하는지 철저하게 교차 검증하여 '통과/확인필요'로 표시할 것.
 3. 제한 사항 경고: 지역 제한, 실적 제한 등이 있는지 필수로 찾아낼 것.
 """
+
+# 3. UI 구성
+st.set_page_config(page_title="마이티시스템 입찰 분석기", layout="wide")
+st.title("🚀 마이티시스템 통합 입찰 적격성 분석 시스템")
+st.markdown("---")
+st.write("조달청 세부품명번호 및 품명, 업종코드, 시공능력평가액이 모두 반영되었습니다.")
+
+uploaded_file = st.file_uploader("분석할 입찰공고서 PDF 파일을 업로드하세요.", type="pdf")
+
+if uploaded_file is not None:
+    with st.spinner("마이티시스템의 등록 정보(품명, 업종 등)와 공고문을 대조 분석 중입니다..."):
+        try:
+            # PDF 텍스트 추출
+            text = ""
+            with pdfplumber.open(uploaded_file) as pdf:
+                for page in pdf.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+            
+            if text.strip():
+                # AI 분석 요청
+                prompt = mighty_profile + "\n\n[입찰공고서 내용]\n" + text
+                response = model.generate_content(prompt)
+                
+                st.success("✅ 분석이 완료되었습니다!")
+                st.markdown(response.text)
+            else:
+                st.error("PDF에서 텍스트를 읽을 수 없습니다. (스캔된 이미지 파일인지 확인 요망)")
+                
+        except Exception as e:
+            st.error(f"분석 중 오류 발생: {e}")
