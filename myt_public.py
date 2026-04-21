@@ -53,124 +53,123 @@ mighty_profile = """
 """
 
 # ==========================================
-# 🌐 3. UI 및 메인 로직 구성 (좌우 분할)
+# 🌐 3. UI 및 메인 로직 구성 (상하 분할)
 # ==========================================
 st.title("🚀 마이티시스템 올인원 입찰 플랫폼")
 st.markdown("---")
 
-col_left, col_right = st.columns(2, gap="large")
-
 # ------------------------------------------
-# ⬅️ 왼쪽 화면: 나라장터 실시간 공고 검색기
+# ⬇️ 위쪽 화면 (1단계): 나라장터 실시간 공고 검색기
 # ------------------------------------------
-with col_left:
-    st.header("📊 1단계: 맞춤 공고 검색")
-    st.write("마이티시스템의 주요 키워드가 포함된 최근 7일 공고를 수집합니다.")
-    
-    if "bids_df" not in st.session_state:
-        st.session_state.bids_df = None
+st.header("📊 1단계: 맞춤 공고 검색")
+st.write("마이티시스템의 주요 키워드가 포함된 최근 7일 공고를 수집합니다.")
 
-    if st.button("🔍 나라장터 실시간 검색 실행", type="primary"):
-        with st.status("조달청 서버에서 공고를 가져오는 중...", expanded=True) as status:
-            keywords = ['정보시스템', '전산시스템', '서버', '스토리지', '인프라', '유지관리', '유지보수']
-            today = datetime.datetime.now()
-            start_date = (today - datetime.timedelta(days=7)).strftime('%Y%m%d0000')
-            end_date = today.strftime('%Y%m%d2359')
-            
-            urls = {
-                "물품": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch",
-                "용역": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch"
-            }
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            all_bids = []
+if "bids_df" not in st.session_state:
+    st.session_state.bids_df = None
 
-            for kind, base_url in urls.items():
-                st.write(f"📂 **{kind} 분야** 검색 중...")
-                for kw in keywords:
-                    encoded_kw = urllib.parse.quote(kw)
-                    req_url = f"{base_url}?ServiceKey={KONEPS_API_KEY}&numOfRows=30&pageNo=1&inqryDiv=1&inqryBgnDt={start_date}&inqryEndDt={end_date}&bidNtceNm={encoded_kw}&type=json"
-                    try:
-                        res = requests.get(req_url, headers=headers, timeout=15, verify=False)
-                        if res.status_code == 200:
-                            data = res.json()
-                            if 'response' in data and 'header' in data['response']:
-                                if data['response']['header'].get('resultCode') == '00':
-                                    items = data['response']['body'].get('items', [])
-                                    for item in items:
-                                        # 🌟 핵심 추가: 조달청 상세링크(bidNtceDtlUrl) 데이터 가져오기
-                                        all_bids.append({
-                                            '상세링크': item.get('bidNtceDtlUrl', ''), 
-                                            '분류': kind,                  
-                                            '공고명': item.get('bidNtceNm', ''),
-                                            '수요기관': item.get('ntceInsttNm', ''),
-                                            '마감일시': item.get('bidClseDt', ''),
-                                            '공고번호': item.get('bidNtceNo', '')
-                                        })
-                        time.sleep(0.3)
-                    except Exception as e:
-                        pass
-            
-            if all_bids:
-                df = pd.DataFrame(all_bids)
-                df = df.drop_duplicates(subset=['공고번호'], keep='first')
-                st.session_state.bids_df = df.sort_values(by='마감일시', ascending=True)
-                status.update(label=f"✅ 수집 완료! (총 {len(st.session_state.bids_df)}건)", state="complete", expanded=False)
-            else:
-                status.update(label="❌ 조건에 맞는 공고가 없습니다.", state="error")
-                st.session_state.bids_df = None
-
-    if st.session_state.bids_df is not None:
-        # 🌟 핵심 추가: 상세링크 컬럼을 클릭 가능한 버튼 형태로 예쁘게 포맷팅
-        st.dataframe(
-            st.session_state.bids_df,
-            use_container_width=True,
-            height=400,
-            column_config={
-                "상세링크": st.column_config.LinkColumn(
-                    "상세보기", # 표의 헤더 이름
-                    display_text="👉 이동하기", # 링크 대신 화면에 보여질 글씨
-                    help="클릭하면 나라장터 공고 원본 페이지가 새 창으로 열립니다."
-                ),
-                "공고명": st.column_config.TextColumn("공고명", width="large") # 공고명 칸을 더 넓게
-            }
-        )
+if st.button("🔍 나라장터 실시간 검색 실행", type="primary"):
+    with st.status("조달청 서버에서 공고를 가져오는 중...", expanded=True) as status:
+        keywords = ['정보시스템', '전산시스템', '서버', '스토리지', '인프라', '유지관리', '유지보수']
+        today = datetime.datetime.now()
+        start_date = (today - datetime.timedelta(days=7)).strftime('%Y%m%d0000')
+        end_date = today.strftime('%Y%m%d2359')
         
-        csv = st.session_state.bids_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 엑셀(CSV) 파일로 다운로드",
-            data=csv,
-            file_name=f"마이티시스템_입찰목록_{datetime.date.today()}.csv",
-            mime="text/csv",
-        )
+        urls = {
+            "물품": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch",
+            "용역": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch"
+        }
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        all_bids = []
 
-# ------------------------------------------
-# ➡️ 오른쪽 화면: AI 입찰 공고서(PDF) 분석기
-# ------------------------------------------
-with col_right:
-    st.header("🤖 2단계: AI 입찰 자격 분석")
-    st.write("왼쪽 표에서 '이동하기'를 눌러 원본을 확인하고, PDF를 다운받아 올려주세요.")
+        for kind, base_url in urls.items():
+            st.write(f"📂 **{kind} 분야** 검색 중...")
+            for kw in keywords:
+                encoded_kw = urllib.parse.quote(kw)
+                req_url = f"{base_url}?ServiceKey={KONEPS_API_KEY}&numOfRows=30&pageNo=1&inqryDiv=1&inqryBgnDt={start_date}&inqryEndDt={end_date}&bidNtceNm={encoded_kw}&type=json"
+                try:
+                    res = requests.get(req_url, headers=headers, timeout=15, verify=False)
+                    if res.status_code == 200:
+                        data = res.json()
+                        if 'response' in data and 'header' in data['response']:
+                            if data['response']['header'].get('resultCode') == '00':
+                                items = data['response']['body'].get('items', [])
+                                for item in items:
+                                    all_bids.append({
+                                        '상세링크': item.get('bidNtceDtlUrl', ''), 
+                                        '분류': kind,                  
+                                        '공고명': item.get('bidNtceNm', ''),
+                                        '수요기관': item.get('ntceInsttNm', ''),
+                                        '마감일시': item.get('bidClseDt', ''),
+                                        '공고번호': item.get('bidNtceNo', '')
+                                    })
+                    time.sleep(0.3)
+                except Exception as e:
+                    pass
+        
+        if all_bids:
+            df = pd.DataFrame(all_bids)
+            df = df.drop_duplicates(subset=['공고번호'], keep='first')
+            st.session_state.bids_df = df.sort_values(by='마감일시', ascending=True)
+            status.update(label=f"✅ 수집 완료! (총 {len(st.session_state.bids_df)}건)", state="complete", expanded=False)
+        else:
+            status.update(label="❌ 조건에 맞는 공고가 없습니다.", state="error")
+            st.session_state.bids_df = None
+
+if st.session_state.bids_df is not None:
+    st.dataframe(
+        st.session_state.bids_df,
+        use_container_width=True,
+        height=400,
+        column_config={
+            "상세링크": st.column_config.LinkColumn(
+                "상세보기", 
+                display_text="👉 이동하기", 
+                help="클릭하면 나라장터 공고 원본 페이지가 새 창으로 열립니다."
+            ),
+            "공고명": st.column_config.TextColumn("공고명", width="large")
+        }
+    )
     
-    uploaded_file = st.file_uploader("입찰공고서 PDF 업로드", type="pdf")
+    csv = st.session_state.bids_df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        label="📥 엑셀(CSV) 파일로 다운로드",
+        data=csv,
+        file_name=f"마이티시스템_입찰목록_{datetime.date.today()}.csv",
+        mime="text/csv",
+    )
 
-    if uploaded_file is not None:
-        with st.spinner("마이티시스템 스펙과 공고문을 정밀 대조 중입니다..."):
-            try:
-                text = ""
-                with pdfplumber.open(uploaded_file) as pdf:
-                    for page in pdf.pages:
-                        extracted = page.extract_text()
-                        if extracted:
-                            text += extracted + "\n"
+# ------------------------------------------
+# 구역을 나누는 시각적 구분선
+st.markdown("<br><hr><br>", unsafe_allow_html=True)
+# ------------------------------------------
+
+# ------------------------------------------
+# ⬇️ 아래쪽 화면 (2단계): AI 입찰 공고서(PDF) 분석기
+# ------------------------------------------
+st.header("🤖 2단계: AI 입찰 자격 분석")
+st.write("위 표에서 '이동하기'를 눌러 원본을 확인하고, 다운받은 PDF 공고문을 올려주세요.")
+
+uploaded_file = st.file_uploader("입찰공고서 PDF 업로드", type="pdf")
+
+if uploaded_file is not None:
+    with st.spinner("마이티시스템 스펙과 공고문을 정밀 대조 중입니다..."):
+        try:
+            text = ""
+            with pdfplumber.open(uploaded_file) as pdf:
+                for page in pdf.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+            
+            if text.strip():
+                prompt = mighty_profile + "\n\n[입찰공고서 내용]\n" + text
+                response = model.generate_content(prompt)
                 
-                if text.strip():
-                    prompt = mighty_profile + "\n\n[입찰공고서 내용]\n" + text
-                    response = model.generate_content(prompt)
-                    
-                    st.success("✅ 분석 완료!")
-                    with st.container(border=True):
-                        st.markdown(response.text)
-                else:
-                    st.error("PDF에서 텍스트를 읽을 수 없습니다. (스캔본 여부 확인)")
-                    
-            except Exception as e:
-                st.error(f"분석 중 오류 발생: {e}")
+                st.success("✅ 분석 완료!")
+                with st.container(border=True):
+                    st.markdown(response.text)
+            else:
+                st.error("PDF에서 텍스트를 읽을 수 없습니다. (스캔본 여부 확인)")
+                
+        except Exception as e:
+            st.error(f"분석 중 오류 발생: {e}")
