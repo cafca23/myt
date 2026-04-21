@@ -17,14 +17,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 st.set_page_config(page_title="마이티시스템 입찰 플랫폼", layout="wide")
 
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-# 차장님의 조달청 일반 인증키
 KONEPS_API_KEY = "fc9942134c063694eeb5dad340a314eec93995f86031e3653cddb5d4d38dfbd3"
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 # ==========================================
-# 👤 2. 마이티시스템 AI 프로필 (이전 버전 완벽 유지)
+# 👤 2. 마이티시스템 AI 프로필
 # ==========================================
 mighty_profile = """
 당신은 '마이티시스템'의 입찰 담당 전문 AI 비서입니다. 
@@ -59,7 +58,6 @@ mighty_profile = """
 st.title("🚀 마이티시스템 올인원 입찰 플랫폼")
 st.markdown("---")
 
-# 화면을 좌/우 5:5 비율로 나눕니다.
 col_left, col_right = st.columns(2, gap="large")
 
 # ------------------------------------------
@@ -69,7 +67,6 @@ with col_left:
     st.header("📊 1단계: 맞춤 공고 검색")
     st.write("마이티시스템의 주요 키워드가 포함된 최근 7일 공고를 수집합니다.")
     
-    # 세션 상태 초기화 (검색 후 다른 버튼을 눌러도 표가 날아가지 않게 유지)
     if "bids_df" not in st.session_state:
         st.session_state.bids_df = None
 
@@ -100,19 +97,19 @@ with col_left:
                                 if data['response']['header'].get('resultCode') == '00':
                                     items = data['response']['body'].get('items', [])
                                     for item in items:
+                                        # 🌟 핵심 추가: 조달청 상세링크(bidNtceDtlUrl) 데이터 가져오기
                                         all_bids.append({
+                                            '상세링크': item.get('bidNtceDtlUrl', ''), 
                                             '분류': kind,                  
-                                            '공고번호': item.get('bidNtceNo', ''),
                                             '공고명': item.get('bidNtceNm', ''),
                                             '수요기관': item.get('ntceInsttNm', ''),
                                             '마감일시': item.get('bidClseDt', ''),
-                                            '검색어': kw
+                                            '공고번호': item.get('bidNtceNo', '')
                                         })
                         time.sleep(0.3)
                     except Exception as e:
-                        pass # 오류는 조용히 넘김
+                        pass
             
-            # 검색 완료 처리
             if all_bids:
                 df = pd.DataFrame(all_bids)
                 df = df.drop_duplicates(subset=['공고번호'], keep='first')
@@ -122,11 +119,22 @@ with col_left:
                 status.update(label="❌ 조건에 맞는 공고가 없습니다.", state="error")
                 st.session_state.bids_df = None
 
-    # 결과 데이터프레임이 있으면 화면에 표시하고 엑셀 다운로드 버튼 제공
     if st.session_state.bids_df is not None:
-        st.dataframe(st.session_state.bids_df, use_container_width=True, height=400)
+        # 🌟 핵심 추가: 상세링크 컬럼을 클릭 가능한 버튼 형태로 예쁘게 포맷팅
+        st.dataframe(
+            st.session_state.bids_df,
+            use_container_width=True,
+            height=400,
+            column_config={
+                "상세링크": st.column_config.LinkColumn(
+                    "상세보기", # 표의 헤더 이름
+                    display_text="👉 이동하기", # 링크 대신 화면에 보여질 글씨
+                    help="클릭하면 나라장터 공고 원본 페이지가 새 창으로 열립니다."
+                ),
+                "공고명": st.column_config.TextColumn("공고명", width="large") # 공고명 칸을 더 넓게
+            }
+        )
         
-        # 엑셀(CSV) 다운로드 버튼 (한글 깨짐 방지를 위해 utf-8-sig 사용)
         csv = st.session_state.bids_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             label="📥 엑셀(CSV) 파일로 다운로드",
@@ -140,7 +148,7 @@ with col_left:
 # ------------------------------------------
 with col_right:
     st.header("🤖 2단계: AI 입찰 자격 분석")
-    st.write("왼쪽에서 찾은 관심 공고의 PDF를 다운받아 올려주세요.")
+    st.write("왼쪽 표에서 '이동하기'를 눌러 원본을 확인하고, PDF를 다운받아 올려주세요.")
     
     uploaded_file = st.file_uploader("입찰공고서 PDF 업로드", type="pdf")
 
@@ -159,7 +167,6 @@ with col_right:
                     response = model.generate_content(prompt)
                     
                     st.success("✅ 분석 완료!")
-                    # 결과를 예쁜 컨테이너 안에 표시
                     with st.container(border=True):
                         st.markdown(response.text)
                 else:
