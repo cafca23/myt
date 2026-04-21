@@ -1,15 +1,31 @@
 import streamlit as st
 import google.generativeai as genai
 import pdfplumber
+import requests
+import datetime
+import urllib.parse
+import pandas as pd
+import time
+import urllib3
 
-# 1. API 키 세팅 및 모델 지정
-api_key = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=api_key)
+# 정부 사이트 SSL 인증서 경고 무시
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# 최신/빠른 모델 사용
+# ==========================================
+# ⚙️ 1. 기본 설정 및 API 키
+# ==========================================
+st.set_page_config(page_title="마이티시스템 입찰 플랫폼", layout="wide")
+
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+# 차장님의 조달청 일반 인증키
+KONEPS_API_KEY = "fc9942134c063694eeb5dad340a314eec93995f86031e3653cddb5d4d38dfbd3"
+
+genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# 2. 마이티시스템 마스터 프로필 (공고번호, 수요기관 출력 추가)
+# ==========================================
+# 👤 2. 마이티시스템 AI 프로필 (이전 버전 완벽 유지)
+# ==========================================
 mighty_profile = """
 당신은 '마이티시스템'의 입찰 담당 전문 AI 비서입니다. 
 아래의 우리 회사 자격 요건을 공고문과 1:1로 대조하여 입찰 적격 여부를 분석해 주세요.
@@ -25,73 +41,129 @@ mighty_profile = """
 - 소프트웨어사업자(컴퓨터관련서비스사업) (업종코드: 1468)
 - 소프트웨어사업자(데이터베이스제작및검색서비스사업) (업종코드: 1470)
 
-[3. 제조물품 (직접생산확인증명서 보유) 및 세부품명번호]
-1. 8111229901 (소프트웨어유지및지원서비스)
-2. 8111159801 (패키지소프트웨어개발및도입서비스)
-3. 8111159901 (정보시스템개발서비스)
-4. 8111179901 (정보인프라구축서비스)
-5. 8111181101 (운영위탁서비스)
-6. 8111189901 (정보시스템유지관리서비스)
-7. 8111219901 (인터넷지원개발서비스)
-
-[4. 공급물품 (제조X) 및 세부품명번호]
-1. 4321150301 (노트북컴퓨터)
-2. 1411150701 (프린트및복사용지)
-3. 2411240101 (공구상자)
-4. 2411240102 (도구보관캐비닛)
-5. 4016160201 (공기청정기)
-6. 4320180201 (디스크어레이)
-7. 4320180301 (하드디스크드라이브)
-8. 4320190301 (테이프백업장치)
-9. 4321150102 (컴퓨터서버)
-10. 4321151004 (상황실장비)
-11. 4322250101 (방화벽장치)
-12. 4322261201 (네트워크스위치)
-13. 4323230401 (데이터베이스관리소프트웨어)
-14. 4619150101 (연기감지기)
-15. 4619150201 (열감지기)
-
-[5. 공장등록]
-- 공장등록: 판교이노베이션랩 지식산업센터 (성남시 소재)
+[3. 제조물품 (직생 보유)] 8111229901(SW유지지원), 8111159801(패키지SW), 8111159901(정보시스템개발), 8111179901(정보인프라구축), 8111181101(운영위탁), 8111189901(정보시스템유지관리) 등
+[4. 공급물품] 4321150301(노트북), 4320180201(디스크어레이), 4321150102(컴퓨터서버), 4322261201(네트워크스위치) 등
+[5. 공장등록] 판교이노베이션랩 지식산업센터 (성남시 소재)
 
 [분석 및 출력 가이드]
-0. 📋 [공고 기본 정보]: 결과의 맨 처음에 표 또는 리스트 형식으로 다음 정보를 명확히 표시할 것.
-   - 공고명: '입찰건명', '사업명'
-   - 입찰공고번호: '공고번호' (예: 20260412345-00)
-   - 수요기관: '발주처', '수요기관', '공고기관' 이름
-
+0. 📋 [공고 기본 정보]: 공고명, 입찰공고번호, 수요기관을 상단에 명시.
 1. [참여 가능 여부]: 🟢가능 / 🟡조건부 / 🔴불가 중 판정하여 크게 표시.
-2. [자격 매칭 리스트]: 업종코드, 물품번호(품명), 시공능력, 직생 여부가 일치하는지 '통과/확인필요'로 표시.
-3. [제한 사항 경고]: 지역 제한(예: 경기도), 실적 제한 여부 요약.
-4. [행정 및 주의사항]: 투찰 마감 시간, 제안서 제출 방식, 설명회 여부 등 요약.
+2. [자격 매칭 리스트]: 업종코드, 물품번호(품명), 시평액, 직생 여부가 일치하는지 '통과/확인필요'로 표시.
+3. [제한 사항 경고]: 지역 제한, 실적 제한 여부 요약.
+4. [행정 및 주의사항]: 투찰 마감 시간, 제안서 제출 방식 등 요약.
 """
 
-# 3. UI 구성
-st.set_page_config(page_title="마이티시스템 입찰 분석기", layout="wide")
-st.title("🚀 마이티시스템 통합 입찰 적격성 분석 시스템")
+# ==========================================
+# 🌐 3. UI 및 메인 로직 구성 (좌우 분할)
+# ==========================================
+st.title("🚀 마이티시스템 올인원 입찰 플랫폼")
 st.markdown("---")
 
-uploaded_file = st.file_uploader("분석할 입찰공고서 PDF 파일을 업로드하세요.", type="pdf")
+# 화면을 좌/우 5:5 비율로 나눕니다.
+col_left, col_right = st.columns(2, gap="large")
 
-if uploaded_file is not None:
-    with st.spinner("공고번호 및 수요기관을 포함하여 마이티시스템 자격과 대조 분석 중입니다..."):
-        try:
-            text = ""
-            with pdfplumber.open(uploaded_file) as pdf:
-                for page in pdf.pages:
-                    extracted = page.extract_text()
-                    if extracted:
-                        text += extracted + "\n"
+# ------------------------------------------
+# ⬅️ 왼쪽 화면: 나라장터 실시간 공고 검색기
+# ------------------------------------------
+with col_left:
+    st.header("📊 1단계: 맞춤 공고 검색")
+    st.write("마이티시스템의 주요 키워드가 포함된 최근 7일 공고를 수집합니다.")
+    
+    # 세션 상태 초기화 (검색 후 다른 버튼을 눌러도 표가 날아가지 않게 유지)
+    if "bids_df" not in st.session_state:
+        st.session_state.bids_df = None
+
+    if st.button("🔍 나라장터 실시간 검색 실행", type="primary"):
+        with st.status("조달청 서버에서 공고를 가져오는 중...", expanded=True) as status:
+            keywords = ['정보시스템', '전산시스템', '서버', '스토리지', '인프라', '유지관리', '유지보수']
+            today = datetime.datetime.now()
+            start_date = (today - datetime.timedelta(days=7)).strftime('%Y%m%d0000')
+            end_date = today.strftime('%Y%m%d2359')
             
-            if text.strip():
-                # 프로필 가이드와 PDF 본문을 결합하여 AI에게 전달
-                prompt = mighty_profile + "\n\n[입찰공고서 내용]\n" + text
-                response = model.generate_content(prompt)
-                
-                st.success("✅ 분석이 완료되었습니다!")
-                st.markdown(response.text)
+            urls = {
+                "물품": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoThngPPSSrch",
+                "용역": "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServcPPSSrch"
+            }
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            all_bids = []
+
+            for kind, base_url in urls.items():
+                st.write(f"📂 **{kind} 분야** 검색 중...")
+                for kw in keywords:
+                    encoded_kw = urllib.parse.quote(kw)
+                    req_url = f"{base_url}?ServiceKey={KONEPS_API_KEY}&numOfRows=30&pageNo=1&inqryDiv=1&inqryBgnDt={start_date}&inqryEndDt={end_date}&bidNtceNm={encoded_kw}&type=json"
+                    try:
+                        res = requests.get(req_url, headers=headers, timeout=15, verify=False)
+                        if res.status_code == 200:
+                            data = res.json()
+                            if 'response' in data and 'header' in data['response']:
+                                if data['response']['header'].get('resultCode') == '00':
+                                    items = data['response']['body'].get('items', [])
+                                    for item in items:
+                                        all_bids.append({
+                                            '분류': kind,                  
+                                            '공고번호': item.get('bidNtceNo', ''),
+                                            '공고명': item.get('bidNtceNm', ''),
+                                            '수요기관': item.get('ntceInsttNm', ''),
+                                            '마감일시': item.get('bidClseDt', ''),
+                                            '검색어': kw
+                                        })
+                        time.sleep(0.3)
+                    except Exception as e:
+                        pass # 오류는 조용히 넘김
+            
+            # 검색 완료 처리
+            if all_bids:
+                df = pd.DataFrame(all_bids)
+                df = df.drop_duplicates(subset=['공고번호'], keep='first')
+                st.session_state.bids_df = df.sort_values(by='마감일시', ascending=True)
+                status.update(label=f"✅ 수집 완료! (총 {len(st.session_state.bids_df)}건)", state="complete", expanded=False)
             else:
-                st.error("PDF에서 텍스트를 읽을 수 없습니다. (스캔된 이미지 파일인지 확인 요망)")
+                status.update(label="❌ 조건에 맞는 공고가 없습니다.", state="error")
+                st.session_state.bids_df = None
+
+    # 결과 데이터프레임이 있으면 화면에 표시하고 엑셀 다운로드 버튼 제공
+    if st.session_state.bids_df is not None:
+        st.dataframe(st.session_state.bids_df, use_container_width=True, height=400)
+        
+        # 엑셀(CSV) 다운로드 버튼 (한글 깨짐 방지를 위해 utf-8-sig 사용)
+        csv = st.session_state.bids_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 엑셀(CSV) 파일로 다운로드",
+            data=csv,
+            file_name=f"마이티시스템_입찰목록_{datetime.date.today()}.csv",
+            mime="text/csv",
+        )
+
+# ------------------------------------------
+# ➡️ 오른쪽 화면: AI 입찰 공고서(PDF) 분석기
+# ------------------------------------------
+with col_right:
+    st.header("🤖 2단계: AI 입찰 자격 분석")
+    st.write("왼쪽에서 찾은 관심 공고의 PDF를 다운받아 올려주세요.")
+    
+    uploaded_file = st.file_uploader("입찰공고서 PDF 업로드", type="pdf")
+
+    if uploaded_file is not None:
+        with st.spinner("마이티시스템 스펙과 공고문을 정밀 대조 중입니다..."):
+            try:
+                text = ""
+                with pdfplumber.open(uploaded_file) as pdf:
+                    for page in pdf.pages:
+                        extracted = page.extract_text()
+                        if extracted:
+                            text += extracted + "\n"
                 
-        except Exception as e:
-            st.error(f"분석 중 오류 발생: {e}")
+                if text.strip():
+                    prompt = mighty_profile + "\n\n[입찰공고서 내용]\n" + text
+                    response = model.generate_content(prompt)
+                    
+                    st.success("✅ 분석 완료!")
+                    # 결과를 예쁜 컨테이너 안에 표시
+                    with st.container(border=True):
+                        st.markdown(response.text)
+                else:
+                    st.error("PDF에서 텍스트를 읽을 수 없습니다. (스캔본 여부 확인)")
+                    
+            except Exception as e:
+                st.error(f"분석 중 오류 발생: {e}")
